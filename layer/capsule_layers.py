@@ -26,22 +26,27 @@ def digit_cap(input, r):
     # logit init
     b = tf.zeros([shape[1], 10])
 
+    # 1152 x D x 8
     input_t = tf.transpose(input, perm=[1, 0, 2])
+
+    # 1152 x 10 x D x 8
     input_t = tf.reshape(tf.tile(input_t, [10, 1, 1]), [tf.shape(input)[1], 10, -1, 8])
 
     for i in range(r):
+        # 1152 x 10
         c = tf.nn.softmax(b, dim=1)
-
+        # 1152 x 10 x 1 x 1
         c_reshaped = tf.reshape(c, [tf.shape(input)[1], 10, 1, 1])
-
-        pred = tf.matmul(input_t, weight)
-        
+        # 1152 x 10 x D x 16
+        pred = tf.matmul(input_t, weight)        
+        # D x 10 x 16
         s = tf.transpose(tf.reduce_sum(pred * c_reshaped, axis=0), perm=[1, 0, 2])
-
         v = squash(s)
-
+        # D x 10 x 1152 x 16
         pred_t = tf.transpose(pred, perm=[2, 1, 0, 3])
+        # D x 10 x 16 x 1
         v_e = tf.expand_dims(v, -1)
+        # 10 x 1152
         delta = tf.squeeze(tf.reduce_sum(tf.matmul(pred_t, v_e), axis=0), axis=2)
         b = b + tf.transpose(delta)
 
@@ -61,12 +66,24 @@ def debug():
 
     pri_cap = primary_cap(conv_1)
 
-    di_cap = digit_cap(pri_cap, 1) 
+    di_cap = digit_cap(pri_cap, 5)  
+
+    y = tf.placeholder(tf.int32, [None])
+
+    yy = tf.one_hot(y, 10)
+    z_length = tf.sqrt(tf.reduce_sum(tf.square(di_cap), axis=2))
+
+    pos_loss = tf.square(tf.nn.relu(1 - z_length))
+    neg_loss = tf.square(tf.nn.relu(z_length - 0))
+
+    cost = tf.reduce_sum(yy * pos_loss + 0.5 * (1 - yy) * neg_loss, axis=1)
 
     print("X: ", X.get_shape())
     print("conv1: ", conv_1.get_shape())
     print("pricap: ", pri_cap.get_shape())
     print("dicap: ", di_cap.get_shape())
+
+    print("y: ", cost.get_shape())
 
 if __name__ == "__main__":
     
